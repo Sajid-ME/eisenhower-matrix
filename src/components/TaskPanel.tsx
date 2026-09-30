@@ -9,15 +9,20 @@ type TaskPanelProps = {
   tasks: Task[];
   onAdd: (title: string) => void;
   onDelete: (id: string) => void;
+  onToggleComplete: (id: string) => void;
+  onEdit: (id: string) => void;
 };
 
-export default function TaskPanel({ tasks, onAdd, onDelete }: TaskPanelProps) {
+export default function TaskPanel({
+  tasks,
+  onAdd,
+  onDelete,
+  onToggleComplete,
+  onEdit,
+}: TaskPanelProps) {
   const [draft, setDraft] = useState('');
 
-  // Tasks still in the Inbox are the ones with no quadrant.
   const inboxTasks = tasks.filter((t) => t.quadrant === null);
-
-  // Make this whole panel a droppable zone with the id "inbox".
   const { setNodeRef, isOver } = useDroppable({ id: 'inbox' });
 
   function handleSubmit(e: React.FormEvent) {
@@ -35,7 +40,6 @@ export default function TaskPanel({ tasks, onAdd, onDelete }: TaskPanelProps) {
         </span>
       </div>
 
-      {/* Input + Add button wrapped in a <form> so Enter submits */}
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           type="text"
@@ -52,7 +56,6 @@ export default function TaskPanel({ tasks, onAdd, onDelete }: TaskPanelProps) {
         </button>
       </form>
 
-      {/* The droppable list area */}
       <div
         ref={setNodeRef}
         className={[
@@ -72,7 +75,12 @@ export default function TaskPanel({ tasks, onAdd, onDelete }: TaskPanelProps) {
           <ul className="space-y-2">
             {inboxTasks.map((task) => (
               <li key={task.id}>
-                <TaskCard task={task} onDelete={onDelete} />
+                <TaskCard
+                  task={task}
+                  onDelete={onDelete}
+                  onToggleComplete={onToggleComplete}
+                  onEdit={onEdit}
+                />
               </li>
             ))}
           </ul>

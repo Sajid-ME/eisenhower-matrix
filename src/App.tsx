@@ -1,5 +1,6 @@
 // App — the root component.
-// Holds global state (dark mode + tasks) and wires up drag-and-drop.
+// Holds global state (dark mode + tasks), wires up drag-and-drop, and
+// controls which task's editor is open.
 import { useEffect, useState } from 'react';
 import {
   DndContext,
@@ -15,18 +16,19 @@ import Header from './components/Header';
 import TaskPanel from './components/TaskPanel';
 import Matrix from './components/Matrix';
 import TaskCard from './components/TaskCard';
+import TaskEditor from './components/TaskEditor';
 
 // ---- Types ----
 
 export type QuadrantCode = 'Q1' | 'Q2' | 'Q3' | 'Q4';
-
-// Anything a task can be dropped into.
 export type DropTarget = QuadrantCode | 'inbox';
 
 export type Task = {
   id: string;
   title: string;
-  quadrant: QuadrantCode | null; // null = still in the Inbox
+  notes: string;
+  delegateTo: string;
+  quadrant: QuadrantCode | null;
   completed: boolean;
   createdAt: number;
 };
@@ -34,6 +36,7 @@ export type Task = {
 // ---- Persistence ----
 
 const TASKS_STORAGE_KEY = 'eisenhower.tasks';
+const VALID_TARGETS: DropTarget[] = ['inbox', 'Q1', 'Q2', 'Q3', 'Q4'];
 
 function loadTasks(): Task[] {
   try {
@@ -41,14 +44,20 @@ function loadTasks(): Task[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as Task[];
+
+    return parsed.map((t: Partial<Task>) => ({
+      id: String(t.id ?? crypto.randomUUID()),
+      title: String(t.title ?? ''),
+      notes: String(t.notes ?? ''),
+      delegateTo: String(t.delegateTo ?? ''),
+      quadrant: t.quadrant ?? null,
+      completed: Boolean(t.completed ?? false),
+      createdAt: Number(t.createdAt ?? Date.now()),
+    }));
   } catch {
     return [];
   }
 }
-
-// Every valid drop target, used to validate what dnd-kit hands us.
-const VALID_TARGETS: DropTarget[] = ['inbox', 'Q1', 'Q2', 'Q3', 'Q4'];
 
 // ---- Component ----
 
@@ -70,14 +79,14 @@ export default function App() {
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
-  // ---- Drag state ----
-  // The id of the task currently being dragged (null when idle).
-  // Used only to render the floating DragOverlay.
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // ---- Which task's editor is open ----
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingTask = editingId ? tasks.find((t) => t.id === editingId) ?? null : null;
 
-  // MouseSensor handles mouse. TouchSensor handles fingers.
-  // The activation constraints mean a plain click or tap is NOT a drag —
-  // so the ✕ delete button still works normally.
+  // ---- Drag state ----
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const isDragging = activeId !== null;
+
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
@@ -92,6 +101,8 @@ export default function App() {
     const newTask: Task = {
       id: crypto.randomUUID(),
       title: trimmed,
+      notes: '',
+      delegateTo: '',
       quadrant: null,
       completed: false,
       createdAt: Date.now(),
@@ -100,19 +111,23 @@ export default function App() {
     setTasks((prev) => [newTask, ...prev]);
   }
 
-  function deleteTask(id: string) {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+  function updateTask(id: string, patch: Partial<Task>) {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  // Move a task into a quadrant (or back to the Inbox).
-  function moveTask(id: string, target: DropTarget) {
+  function deleteTask(id: string) {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    if (editingId === id) setEditingId(null);
+  }
+
+  function toggleComplete(id: string) {
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, quadrant: target === 'inbox' ? null : target }
-          : t
-      )
+      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
+  }
+
+  function moveTask(id: string, target: DropTarget) {
+    updateTask(id, { quadrant: target === 'inbox' ? null : target });
   }
 
   // ---- Drag handlers ----
@@ -123,13 +138,11 @@ export default function App() {
 
   function handleDragEnd(event: DragEndEvent) {
     setActiveId(null);
-
     const { active, over } = event;
-    if (!over) return; // dropped outside any zone — do nothing
+    if (!over) return;
 
     const taskId = String(active.id);
     const target = String(over.id) as DropTarget;
-
     if (!VALID_TARGETS.includes(target)) return;
 
     moveTask(taskId, target);
@@ -150,15 +163,35 @@ export default function App() {
         onDragCancel={() => setActiveId(null)}
       >
         <main className="mx-auto grid max-w-7xl gap-6 p-4 lg:grid-cols-[320px_1fr] lg:p-6">
-          <TaskPanel tasks={tasks} onAdd={addTask} onDelete={deleteTask} />
-          <Matrix tasks={tasks} onDelete={deleteTask} />
+          <TaskPanel
+            tasks={tasks}
+            onAdd={addTask}
+            onDelete={deleteTask}
+            onToggleComplete={toggleComplete}
+            onEdit={setEditingId}
+          />
+          <Matrix
+            tasks={tasks}
+            onDelete={deleteTask}
+            onToggleComplete={toggleComplete}
+            onEdit={setEditingId}
+            isDragging={isDragging}
+          />
         </main>
 
-        {/* The floating card that follows your cursor while dragging */}
         <DragOverlay dropAnimation={null}>
           {activeTask ? <TaskCard task={activeTask} overlay /> : null}
         </DragOverlay>
       </DndContext>
+
+      {editingTask && (
+        <TaskEditor
+          task={editingTask}
+          onChange={(patch) => updateTask(editingTask.id, patch)}
+          onClose={() => setEditingId(null)}
+          onDelete={deleteTask}
+        />
+      )}
     </div>
   );
 }
