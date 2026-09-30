@@ -1,0 +1,7 @@
+<!-- Favicon: the 4-color 2x2 logo used in the header -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect x="1"  y="1"  width="14" height="14" rx="2" fill="#f43f5e" />
+  <rect x="17" y="1"  width="14" height="14" rx="2" fill="#6366f1" />
+  <rect x="1"  y="17" width="14" height="14" rx="2" fill="#f59e0b" />
+  <rect x="17" y="17" width="14" height="14" rx="2" fill="#64748b" />
+</svg>
