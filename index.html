@@ -3,7 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eisenhower Matrix</title>
+
+    <!-- Title and description: what shows in the browser tab and search results -->
+    <title>Eisenhower Matrix — Do the Right Thing First</title>
+    <meta
+      name="description"
+      content="A simple, fast Eisenhower Matrix. Dump your tasks, drag them into the four quadrants, and focus on what matters today."
+    />
+
+    <!-- Favicon (the file you just created in public/) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Browser UI color on mobile (address bar tint) -->
+    <meta name="theme-color" content="#6366f1" />
+
+    <!-- Open Graph — how the link looks when shared on social/messaging -->
+    <meta property="og:title" content="Eisenhower Matrix" />
+    <meta
+      property="og:description"
+      content="Dump your tasks. Sort what matters. Do the right thing first."
+    />
+    <meta property="og:type" content="website" />
+
+    <!-- Prevent a flash of light theme before React sets dark mode -->
+    <script>
+      try {
+        var saved = localStorage.getItem('theme');
+        if (saved === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {
+        /* ignore — private mode, storage disabled, etc. */
+      }
+    </script>
   </head>
   <body>
     <!-- React will render everything inside this div -->
