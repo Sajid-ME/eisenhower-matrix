@@ -1,6 +1,6 @@
 // App — the root component.
-// Holds global state (dark mode + tasks), wires up drag-and-drop, and
-// controls which task's editor is open.
+// Holds global state (dark mode + tasks + current view),
+// wires up drag-and-drop, and controls which task's editor is open.
 import { useEffect, useState } from 'react';
 import {
   DndContext,
@@ -17,11 +17,14 @@ import TaskPanel from './components/TaskPanel';
 import Matrix from './components/Matrix';
 import TaskCard from './components/TaskCard';
 import TaskEditor from './components/TaskEditor';
+import Analytics from './components/Analytics';
+import { suggestQuadrant } from './lib/suggest';
 
 // ---- Types ----
 
 export type QuadrantCode = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 export type DropTarget = QuadrantCode | 'inbox';
+export type View = 'matrix' | 'analytics';
 
 export type Task = {
   id: string;
@@ -79,6 +82,9 @@ export default function App() {
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
 
+  // ---- View ----
+  const [view, setView] = useState<View>('matrix');
+
   // ---- Which task's editor is open ----
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingTask = editingId ? tasks.find((t) => t.id === editingId) ?? null : null;
@@ -94,7 +100,8 @@ export default function App() {
 
   // ---- Task actions ----
 
-  function addTask(title: string) {
+  // Add a task. Optional quadrant lets callers drop it straight into a quadrant.
+  function addTask(title: string, quadrant: QuadrantCode | null = null) {
     const trimmed = title.trim();
     if (!trimmed) return;
 
@@ -103,7 +110,7 @@ export default function App() {
       title: trimmed,
       notes: '',
       delegateTo: '',
-      quadrant: null,
+      quadrant,
       completed: false,
       createdAt: Date.now(),
     };
@@ -130,6 +137,32 @@ export default function App() {
     updateTask(id, { quadrant: target === 'inbox' ? null : target });
   }
 
+  // Auto-sort every Inbox task that has a confident suggestion.
+  // Returns the number of tasks that were moved.
+  function autoSortInbox(): number {
+    // 1. Work out which tasks will move and where.
+    //    We compute this BEFORE calling setTasks so the return value is reliable.
+    const moves = new Map<string, QuadrantCode>();
+    for (const t of tasks) {
+      if (t.quadrant !== null) continue; // not in the Inbox
+      const s = suggestQuadrant(t.title);
+      if (!s) continue;
+      moves.set(t.id, s.quadrant);
+    }
+
+    if (moves.size === 0) return 0;
+
+    // 2. Apply them all in one update.
+    setTasks((prev) =>
+      prev.map((t) => {
+        const dest = moves.get(t.id);
+        return dest ? { ...t, quadrant: dest } : t;
+      })
+    );
+
+    return moves.size;
+  }
+
   // ---- Drag handlers ----
 
   function handleDragStart(event: DragStartEvent) {
@@ -154,7 +187,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <Header dark={dark} onToggleDark={() => setDark((d) => !d)} />
+      <Header
+        dark={dark}
+        onToggleDark={() => setDark((d) => !d)}
+        view={view}
+        onViewChange={setView}
+      />
 
       <DndContext
         sensors={sensors}
@@ -169,14 +207,20 @@ export default function App() {
             onDelete={deleteTask}
             onToggleComplete={toggleComplete}
             onEdit={setEditingId}
+            onAutoSort={autoSortInbox}
           />
-          <Matrix
-            tasks={tasks}
-            onDelete={deleteTask}
-            onToggleComplete={toggleComplete}
-            onEdit={setEditingId}
-            isDragging={isDragging}
-          />
+
+          {view === 'matrix' ? (
+            <Matrix
+              tasks={tasks}
+              onDelete={deleteTask}
+              onToggleComplete={toggleComplete}
+              onEdit={setEditingId}
+              isDragging={isDragging}
+            />
+          ) : (
+            <Analytics tasks={tasks} dark={dark} />
+          )}
         </main>
 
         <DragOverlay dropAnimation={null}>
