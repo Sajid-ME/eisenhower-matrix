@@ -1,0 +1,13 @@
+/* Tailwind CSS v4 — one import line loads everything. */
+@import "tailwindcss";
+
+/* Enables class-based dark mode.
+   We toggle a `.dark` class on <html> from React. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Make the app fill the screen height. */
+html,
+body,
+#root {
+  height: 100%;
+}
